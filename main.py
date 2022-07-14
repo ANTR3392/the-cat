@@ -250,4 +250,4 @@ async def withdraw(
         await inter.send(f'Ты вытащил {amount} монет из банка')
 
 
-bot.run("ODY1NDYwOTE5NzAyNTE5ODYz.G2kZ0R.8hSKjX0nBldUtkbKVjgAMsHzmeK3F4SUCvqS8A")
+bot.run(open('token.txt').read())
