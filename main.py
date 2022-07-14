@@ -3,11 +3,13 @@ import random
 
 import disnake
 from disnake.ext import commands
-import db, time
 
-from modals.suggest import Suggest
-from modals.report import Report
+import db
+import time
 from modals.clan import Clan
+from modals.report import Report
+from modals.suggest import Suggest
+from json import dumps as tostr
 
 bot = commands.InteractionBot(test_guilds=[927860273388343306], intents=disnake.Intents.all())
 disnake.Embed.set_default_color(disnake.Color.blurple())
@@ -154,6 +156,7 @@ async def leaders(
     users = [
                 int(id.split('.')[0])
                 for id in os.listdir('db/')
+                if 'server' not in id
             ][:25]
 
     def sort(id):
@@ -196,6 +199,7 @@ async def leaders(
 {user.json['dep']} в банке
 {user.json['bal'] + user.json['dep']} всего'''
 
+    users = [u for u in users if sort(u)]
     users.sort(key=sort, reverse=True)
     c = {
         'voice': 'сиденью в войсе',
@@ -208,7 +212,7 @@ async def leaders(
     for x in range(len(users)):
         emb.add_field(
             name=f'{x + 1}. {bot.get_user(users[x])}',
-            value=show_data(users[x]), inline=False
+            value=show_data(users[x]), inline=True
         )
 
     await inter.send(embed=emb)
@@ -217,7 +221,10 @@ async def leaders(
 @bot.slash_command(description='Вложить деньги в банк')
 async def deposit(
         inter: disnake.CommandInter,
-        amount: int = None
+        amount: int = commands.param(
+            min_value=1,
+            default=None
+        )
 ):
     with db.db(inter.author.id) as d:
         if amount is None:
@@ -235,7 +242,10 @@ async def deposit(
 @bot.slash_command(description='Вытащить деньги из банка')
 async def withdraw(
         inter: disnake.CommandInter,
-        amount: int = None
+        amount: int = commands.param(
+            min_value=1,
+            default=None
+        )
 ):
     with db.db(inter.author.id) as d:
         if amount is None:
@@ -248,6 +258,107 @@ async def withdraw(
         d.json['dep'] -= amount
 
         await inter.send(f'Ты вытащил {amount} монет из банка')
+
+
+@bot.slash_command(
+    description='Изменить баланс',
+    default_permission=False,
+    name='set-money'
+)
+async def set_money(
+        inter: disnake.CommandInter,
+        user: disnake.User,
+        amount: int,
+        action: str = commands.param(
+            choices={
+                'Добавить': '+',
+                'Забрать': '-'
+            }, default=None
+        )
+):
+    with db.ServerData() as d:
+        d.json['audit'].append({
+            'user': inter.author.id,
+            'action': db.Const.audit_change_bal,
+            'target': user.id,
+            'value': (action or '=') + ' ' + str(amount),
+            'timestamp': time.time()
+        })
+
+    with db.db(user.id) as d:
+        match action:
+            case '+':
+                d.json['bal'] += amount
+            case '-':
+                d.json['bal'] -= amount
+            case None:
+                d.json['bal'] = amount
+
+        await inter.send(
+            f'Теперь у {user.mention} {d.json["bal"]} монет',
+            allowed_mentions=disnake.AllowedMentions(users=[])
+        )
+
+
+@bot.slash_command(
+    description='Просмотр действий',
+    default_permission=False
+)
+async def audit(
+        inter: disnake.CommandInter,
+        admin: disnake.User = None,
+        target: disnake.User = None,
+        action: str = commands.param(
+            choices={
+                'Изменение кол-ва монет': '0',
+                'Создание предмета': '1',
+                'Удаление предмета': '2',
+                'Изменение предмета': '3',
+                'Передача денег': '4',
+                'Воровство': '5'
+            }, default=None
+        )
+):
+    acts = [
+                'Изменение кол-ва монет',
+                'Создание предмета',
+                'Удаление предмета',
+                'Изменение предмета',
+                'Передача денег',
+                'Воровство'
+            ]
+    data = []
+
+    with db.ServerData() as d:
+        unsorted = d.json['audit']
+
+    if action:
+        action = int(action)
+
+    if admin:
+        admin = admin.id
+
+    if target:
+        target = target.id
+
+    for x in unsorted:
+        if (x['action'] == action or action is None) and \
+                (x['user'] == admin or admin is None) and \
+                (x['target'] == target or target is None):
+            data.append(x)
+    data = data[:25]
+    emb = disnake.Embed()
+    for x in data:
+        emb.add_field(
+            name='‌',
+            value=(
+                f'Админ: <@{x["user"]}>\n'
+                f'Действие: {acts[int(x["action"])]}\n'
+                f'Юзер: <@{x["target"]}>\n'
+                f'Время: <t:{round(x["timestamp"])}:R>'
+            ), inline=True
+        )
+    await inter.send(embed=emb)
 
 
 bot.run(open('token.txt').read())
