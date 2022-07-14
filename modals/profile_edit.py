@@ -60,4 +60,4 @@ class PEdit(disnake.ui.modal.Modal):
             except:
                 d.json['age'] = ''
 
-        await inter.send(embed=profile_embed(inter.author))
+        await inter.send(embed=profile_embed(inter.author), ephemeral=True)

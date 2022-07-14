@@ -144,7 +144,7 @@ async def edit(
 
 
 @bot.slash_command()
-async def leaders(
+async def top(
         inter: disnake.CommandInter,
         criteria: str = commands.param(choices={
             'Войс': 'voice',
@@ -231,12 +231,12 @@ async def deposit(
             amount = d.json['bal']
 
         if amount > d.json['bal']:
-            return await inter.send(f'У тебя слишком мало денег ({d.json["bal"]} / {amount})')
+            return await inter.send(f'У тебя слишком мало денег ({d.json["bal"]} / {amount})', ephemeral=True)
 
         d.json['dep'] += amount
         d.json['bal'] -= amount
 
-        await inter.send(f'Ты положил {amount} монет в банк')
+        await inter.send(f'Ты положил {amount} монет в банк', ephemeral=True)
 
 
 @bot.slash_command(description='Вытащить деньги из банка')
@@ -252,12 +252,12 @@ async def withdraw(
             amount = d.json['dep']
 
         if amount > d.json['dep']:
-            return await inter.send(f'У тебя слишком мало денег в банке ({d.json["dep"]} / {amount})')
+            return await inter.send(f'У тебя слишком мало денег в банке ({d.json["dep"]} / {amount})', ephemeral=True)
 
         d.json['bal'] += amount
         d.json['dep'] -= amount
 
-        await inter.send(f'Ты вытащил {amount} монет из банка')
+        await inter.send(f'Ты вытащил {amount} монет из банка', ephemeral=True)
 
 
 @bot.slash_command(
@@ -359,6 +359,7 @@ async def audit(
             ), inline=True
         )
     await inter.send(embed=emb)
+
 
 
 bot.run(open('token.txt').read())
