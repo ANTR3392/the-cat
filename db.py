@@ -24,7 +24,13 @@ class db:
             'bal': 0,
             'gender': '',
             'dep': 0,
-            'mc_name': ''
+            'mc_name': '',
+            'rob_used': 0,
+            'work_used': 0,
+            'timely_used': 0,
+            'daily_used': 0,
+            'weekly_used': 0,
+            'monthly_used': 0,
         }, **self.json}
         return self
 
@@ -48,12 +54,3 @@ class ServerData:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         save(self.json, open(f'db/server.json', 'w'))
-
-
-class Const:
-    audit_change_bal = 0
-    audit_add_item = 1
-    audit_rm_item = 2
-    audit_edit_item = 3
-    audit_pay = 4
-    audit_rob = 5

@@ -4,6 +4,7 @@ import random
 import disnake
 from disnake.ext import commands
 
+import constants
 import db
 import time
 from modals.clan import Clan
@@ -51,7 +52,7 @@ def profile_embed(user: disnake.User):
 
     emb.add_field('В руках', data['bal'], inline=True)
     emb.add_field('В банке', data['dep'], inline=True)
-    emb.add_field('Уровень', f"{data['lvl']} [{data['xp']}/{(data['lvl'] * 200) or 100}]", inline=True)
+    emb.add_field('Уровень', f"{data['lvl']} [{data['xp']}/{(data['lvl'] * constants.level_requirement_enlarge) or 100}]", inline=True)
 
     emb.set_author(name=user, icon_url=user.display_avatar.url)
 
@@ -75,8 +76,8 @@ async def on_message(msg: disnake.Message):
             d.json['last_msg'] = time.time()
             d.json['xp'] += 1
             d.json['bal'] += random.randint(1, 5)
-            if d.json['xp'] >= d.json['lvl'] * 200:
-                d.json['xp'] -= d.json['lvl'] * 200
+            if d.json['xp'] >= d.json['lvl'] * constants.level_requirement_enlarge:
+                d.json['xp'] -= d.json['lvl'] * constants.level_requirement_enlarge
                 d.json['lvl'] += 1
                 d.json['bal'] += random.randint(5, 10)
                 await bot.get_channel(940884092386430986).send(
@@ -170,7 +171,7 @@ async def top(
                     tmp = user.json['xp']
                     for x in range(user.json['lvl'] - 1):
                         x += 1
-                        tmp += x * 200
+                        tmp += x * constants.level_requirement_enlarge
 
                     return tmp
                 case 'bal':
@@ -193,7 +194,7 @@ async def top(
                 case 'msg_amt':
                     return str(user.json['msg_amt']) + ' сообщений'
                 case 'lvl':
-                    return f"{user.json['lvl']} [{user.json['xp']}/{(user.json['lvl'] * 200) or 100}]"
+                    return f"{user.json['lvl']} [{user.json['xp']}/{(user.json['lvl'] * constants.level_requirement_enlarge) or 100}]"
                 case 'bal':
                     return f'''{user.json['bal']} в руках
 {user.json['dep']} в банке
@@ -262,7 +263,7 @@ async def withdraw(
 
 @bot.slash_command(
     description='Изменить баланс',
-    default_permission=False,
+    default_member_permission=False,
     name='set-money'
 )
 async def set_money(
@@ -279,7 +280,7 @@ async def set_money(
     with db.ServerData() as d:
         d.json['audit'].append({
             'user': inter.author.id,
-            'action': db.Const.audit_change_bal,
+            'action': constants.audit_change_bal,
             'target': user.id,
             'value': (action or '=') + ' ' + str(amount),
             'timestamp': time.time()
@@ -302,7 +303,7 @@ async def set_money(
 
 @bot.slash_command(
     description='Просмотр действий',
-    default_permission=False
+    default_member_permission=False
 )
 async def audit(
         inter: disnake.CommandInter,
@@ -320,13 +321,13 @@ async def audit(
         )
 ):
     acts = [
-                'Изменение кол-ва монет',
-                'Создание предмета',
-                'Удаление предмета',
-                'Изменение предмета',
-                'Передача денег',
-                'Воровство'
-            ]
+        'Изменение кол-ва монет',
+        'Создание предмета',
+        'Удаление предмета',
+        'Изменение предмета',
+        'Передача денег',
+        'Воровство'
+    ]
     data = []
 
     with db.ServerData() as d:
@@ -352,7 +353,7 @@ async def audit(
         emb.add_field(
             name='‌',
             value=(
-                f'Админ: <@{x["user"]}>\n'
+                f'Действие выполнил: <@{x["user"]}>\n'
                 f'Действие: {acts[int(x["action"])]}\n'
                 f'Юзер: <@{x["target"]}>\n'
                 f'Время: <t:{round(x["timestamp"])}:R>'
@@ -361,5 +362,58 @@ async def audit(
     await inter.send(embed=emb)
 
 
+@bot.slash_command(description='Воровать')
+async def rob(
+        inter: disnake.CommandInter,
+        user: disnake.User
+):
+    err = ''
+    if user.bot:
+        err = 'У ботов денег нет'
+
+    if user.id == inter.author.id:
+        err = f'Ты украл у себя {random.randint(15, 25)} монет, но кто-то украл у тебя столько же.. странное ' \
+              f'совпадение.. '
+
+    with db.db(user.id) as d:
+        if d.json['bal'] < 1:
+            err = f'Ты украл воздух у {user.mention if user.id != inter.author.id else "себя"}'
+        else:
+            ubal = d.json['bal']
+
+    with db.db(inter.author.id) as d:
+        if time.time() < d.json['rob_used'] + constants.cooldown_rob:
+            err = f'Ты воруешь слишком часто, повтори попытку <t:{round(d.json["rob_used"] + constants.cooldown_rob)}:R>'
+        mbal = d.json['bal'] + d.json['dep']
+
+    if err:
+        return await inter.send(err, ephemeral=True)
+
+    steal = random.randint(round(-mbal/5), round(ubal/5))
+
+    if steal < 0:
+        msg = f'Ты потерял {-steal} монет'
+    elif steal > 0:
+        msg = f'Ты украл {steal} монет'
+
+        with db.db(user.id) as d:
+            d.json['bal'] -= steal
+    else:
+        msg = 'Ты не смог украсть монеты'
+
+    with db.db(inter.author.id) as d:
+        d.json['bal'] += steal
+        d.json['rob_used'] = time.time()
+
+    with db.ServerData() as d:
+        d.json['audit'].append({
+            'user': inter.author.id,
+            'action': constants.audit_rob,
+            'target': user.id,
+            'value': f'{steal}',
+            'timestamp': time.time()
+        })
+
+    await inter.send(msg, allowed_mentions=disnake.AllowedMentions(users=[]))
 
 bot.run(open('token.txt').read())
